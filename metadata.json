@@ -1,0 +1,6 @@
+{
+  "name": "CULTURE",
+  "description": "AI that understands how you learn. An adaptive AI educational platform designed for students across all learning stages and teachers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
