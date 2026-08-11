@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { X, Calendar, Sparkles, RefreshCw, Copy, Check, Clock, BookOpen, Users, CheckSquare } from 'lucide-react';
+import { X, Calendar, Sparkles, RefreshCw, Copy, Check, Clock, BookOpen, Users, CheckSquare, AlertCircle } from 'lucide-react';
 import { LessonPlanData, UserProfile } from '../../types';
 import { recordLearningActivity } from '../../lib/dataService';
+import { supabase } from '../../lib/supabase';
 
 interface LessonPlanModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ export const LessonPlanModal: React.FC<LessonPlanModalProps> = ({ isOpen, onClos
   const [gradeLevel, setGradeLevel] = useState(`Grade ${user.educationLevel}`);
   const [duration, setDuration] = useState('45 mins');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [plan, setPlan] = useState<LessonPlanData | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -23,12 +25,23 @@ export const LessonPlanModal: React.FC<LessonPlanModalProps> = ({ isOpen, onClos
     if (!topic.trim() || loading) return;
 
     setLoading(true);
+    setError(null);
     setCopied(false);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+        setError('Authentication required. Please sign in to continue.');
+        return;
+      }
+
       const res = await fetch('/api/tools/lesson-plan', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({
           topic,
           gradeLevel,
@@ -38,6 +51,12 @@ export const LessonPlanModal: React.FC<LessonPlanModalProps> = ({ isOpen, onClos
       });
       const text = await res.text();
       const json = text ? JSON.parse(text) : {};
+
+      if (!res.ok || json.error) {
+        setError(json.error || "CULTURE AI couldn't complete that request right now. Please try again.");
+        return;
+      }
+
       if (json.lessonPlan) {
         setPlan(json.lessonPlan);
         if (user?.id) {
@@ -52,6 +71,7 @@ export const LessonPlanModal: React.FC<LessonPlanModalProps> = ({ isOpen, onClos
       }
     } catch (err) {
       console.error('Lesson plan error:', err);
+      setError("CULTURE AI couldn't complete that request right now. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -147,6 +167,14 @@ ${plan.homework}`;
           {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
           <span>Generate Structured Lesson Plan</span>
         </button>
+
+        {/* Error Alert Banner */}
+        {error && (
+          <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs sm:text-sm flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 shrink-0 text-red-400" />
+            <span>{error}</span>
+          </div>
+        )}
 
         {/* Plan Display */}
         {plan && (

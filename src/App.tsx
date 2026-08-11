@@ -368,12 +368,21 @@ export default function App() {
     }
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+        throw new Error('Authentication required. Please sign in to continue.');
+      }
+
       const activeConv = updatedConvs.find((c) => c.id === targetConvId);
       const history = activeConv ? activeConv.messages : [];
 
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({
           message: text,
           history,

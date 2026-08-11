@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
+import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -10,6 +11,105 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json({ limit: "10mb" }));
+
+// Server-side Supabase client for token authentication
+let supabaseClient: ReturnType<typeof createClient> | null = null;
+
+function getSupabaseClient() {
+  if (!supabaseClient) {
+    const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "https://placeholder.supabase.co";
+    const key = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "placeholder-anon-key";
+    supabaseClient = createClient(url, key, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
+  }
+  return supabaseClient;
+}
+
+// Authenticate incoming requests via Supabase access token
+async function authenticateRequest(req: express.Request, res: express.Response): Promise<string | null> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || typeof authHeader !== "string") {
+    res.status(401).json({ error: "Authentication required" });
+    return null;
+  }
+
+  const parts = authHeader.split(" ");
+  if (parts.length !== 2 || parts[0] !== "Bearer" || !parts[1].trim()) {
+    res.status(401).json({ error: "Authentication required" });
+    return null;
+  }
+
+  const token = parts[1].trim();
+
+  try {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.auth.getUser(token);
+
+    if (error || !data?.user) {
+      res.status(401).json({ error: "Invalid or expired authentication token" });
+      return null;
+    }
+
+    return data.user.id;
+  } catch (_err) {
+    res.status(401).json({ error: "Authentication failed" });
+    return null;
+  }
+}
+
+// Production-safe error handler for Gemini API requests
+function handleGeminiError(res: express.Response, error: any, endpointName: string) {
+  console.error(`${endpointName} error:`, error);
+
+  const errorStr = (error?.message || error?.statusText || String(error || "")).toLowerCase();
+  const statusCode = error?.status || error?.statusCode;
+
+  // Detect quota / rate-limit failures
+  const isQuota =
+    statusCode === 429 ||
+    errorStr.includes("429") ||
+    errorStr.includes("resource_exhausted") ||
+    errorStr.includes("quota") ||
+    errorStr.includes("rate limit") ||
+    errorStr.includes("too many requests");
+
+  if (isQuota) {
+    return res.status(503).json({
+      error: "CULTURE AI is temporarily unavailable because the AI service has reached its current capacity. Please try again later.",
+    });
+  }
+
+  // Detect upstream / network / temporary service failures
+  const isTemporary =
+    statusCode === 503 ||
+    statusCode === 502 ||
+    statusCode === 504 ||
+    errorStr.includes("503") ||
+    errorStr.includes("502") ||
+    errorStr.includes("504") ||
+    errorStr.includes("unavailable") ||
+    errorStr.includes("econnreset") ||
+    errorStr.includes("etimedout") ||
+    errorStr.includes("fetch failed") ||
+    errorStr.includes("network") ||
+    errorStr.includes("timeout") ||
+    errorStr.includes("overloaded");
+
+  if (isTemporary) {
+    return res.status(503).json({
+      error: "CULTURE AI is temporarily unavailable right now. Please try again in a little while.",
+    });
+  }
+
+  // Other unexpected Gemini / server errors
+  return res.status(500).json({
+    error: "CULTURE AI couldn't complete that request right now. Please try again.",
+  });
+}
 
 // Helper to initialize GenAI lazily when requested by an AI endpoint
 let genAIClient: GoogleGenAI | null = null;
@@ -185,6 +285,9 @@ app.get("/api/health", (_req, res) => {
 // API: Adaptive Chat
 app.post("/api/chat", async (req, res) => {
   try {
+    const userId = await authenticateRequest(req, res);
+    if (!userId) return;
+
     const { message, history, context } = req.body;
     if (!message || typeof message !== "string" || !message.trim()) {
       return res.status(400).json({ error: "Message is required" });
@@ -207,15 +310,16 @@ app.post("/api/chat", async (req, res) => {
     const replyText = response.text || "I was unable to generate a response. Please try asking again.";
     res.json({ text: replyText });
   } catch (error: any) {
-    console.error("Chat API error:", error);
-    const errorMessage = error?.message || "Failed to generate AI response";
-    res.status(500).json({ error: errorMessage });
+    return handleGeminiError(res, error, "Chat API");
   }
 });
 
 // API: Generate Interactive Quiz
 app.post("/api/tools/quiz", async (req, res) => {
   try {
+    const userId = await authenticateRequest(req, res);
+    if (!userId) return;
+
     const { topic, context, questionCount = 4 } = req.body;
     const ai = getGenAI();
     const level = context?.educationLevel || context?.grade || "high_school";
@@ -250,14 +354,16 @@ Make questions, options, and explanations appropriate for this level.`;
     const quizData = JSON.parse(jsonStr);
     res.json({ quiz: quizData });
   } catch (error: any) {
-    console.error("Quiz error:", error);
-    res.status(500).json({ error: error?.message || "Failed to generate quiz" });
+    return handleGeminiError(res, error, "Quiz API");
   }
 });
 
 // API: Level Comparison (Displays how CULTURE adapts 1 topic across all 4 levels)
 app.post("/api/tools/compare-levels", async (req, res) => {
   try {
+    const userId = await authenticateRequest(req, res);
+    if (!userId) return;
+
     const { topic } = req.body;
     const ai = getGenAI();
     const targetTopic = topic || "Gravity";
@@ -299,14 +405,16 @@ Output a JSON object with four keys:
     const data = JSON.parse(jsonStr);
     res.json(data);
   } catch (error: any) {
-    console.error("Compare error:", error);
-    res.status(500).json({ error: error?.message || "Failed to compare levels" });
+    return handleGeminiError(res, error, "Compare levels API");
   }
 });
 
 // API: Generate Lesson Plan (Teacher Tool)
 app.post("/api/tools/lesson-plan", async (req, res) => {
   try {
+    const userId = await authenticateRequest(req, res);
+    if (!userId) return;
+
     const { topic, gradeLevel, duration = "45 mins", context } = req.body;
     const ai = getGenAI();
 
@@ -343,14 +451,16 @@ Teacher Name: "${context?.name || "Educator"}"`;
     const plan = JSON.parse(jsonStr);
     res.json({ lessonPlan: plan });
   } catch (error: any) {
-    console.error("Lesson plan error:", error);
-    res.status(500).json({ error: error?.message || "Failed to generate lesson plan" });
+    return handleGeminiError(res, error, "Lesson plan API");
   }
 });
 
 // API: Flashcard Generator
 app.post("/api/tools/flashcards", async (req, res) => {
   try {
+    const userId = await authenticateRequest(req, res);
+    if (!userId) return;
+
     const { topic, context, count = 5 } = req.body;
     const ai = getGenAI();
     const level = context?.educationLevel || context?.grade || "high_school";
@@ -372,8 +482,7 @@ Output JSON only with array of objects having "front" and "back".`;
     const data = JSON.parse(jsonStr);
     res.json(data);
   } catch (error: any) {
-    console.error("Flashcards error:", error);
-    res.status(500).json({ error: error?.message || "Failed to generate flashcards" });
+    return handleGeminiError(res, error, "Flashcards API");
   }
 });
 

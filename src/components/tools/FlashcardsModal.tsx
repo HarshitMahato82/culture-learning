@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { X, Grid, Sparkles, RefreshCw, ArrowLeft, ArrowRight, RotateCw } from 'lucide-react';
+import { X, Grid, Sparkles, RefreshCw, ArrowLeft, ArrowRight, RotateCw, AlertCircle } from 'lucide-react';
 import { Flashcard, UserProfile } from '../../types';
 import { recordLearningActivity } from '../../lib/dataService';
+import { supabase } from '../../lib/supabase';
 
 interface FlashcardsModalProps {
   isOpen: boolean;
@@ -13,6 +14,7 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({ isOpen, onClos
   const [topic, setTopic] = useState('Key Formulas in Physics');
   const [cardCount, setCardCount] = useState<number>(5);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [flashcards, setFlashcards] = useState<Flashcard[]>([
     { front: 'Kinematic equation for final velocity with constant acceleration', back: 'v = u + at' },
     { front: 'Newton’s Second Law of Motion', back: 'F = m · a (Force = Mass × Acceleration)' },
@@ -28,13 +30,24 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({ isOpen, onClos
     if (!topic.trim() || loading) return;
 
     setLoading(true);
+    setError(null);
     setIsFlipped(false);
     setCurrentIndex(0);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+        setError('Authentication required. Please sign in to continue.');
+        return;
+      }
+
       const res = await fetch('/api/tools/flashcards', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({
           topic,
           count: cardCount,
@@ -43,6 +56,12 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({ isOpen, onClos
       });
       const text = await res.text();
       const json = text ? JSON.parse(text) : {};
+
+      if (!res.ok || json.error) {
+        setError(json.error || "CULTURE AI couldn't complete that request right now. Please try again.");
+        return;
+      }
+
       if (json.flashcards && Array.isArray(json.flashcards)) {
         setFlashcards(json.flashcards);
         if (user?.id) {
@@ -57,6 +76,7 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({ isOpen, onClos
       }
     } catch (err) {
       console.error('Flashcards error:', err);
+      setError("CULTURE AI couldn't complete that request right now. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -126,6 +146,14 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({ isOpen, onClos
             </button>
           </div>
         </div>
+
+        {/* Error Alert Banner */}
+        {error && (
+          <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs sm:text-sm flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 shrink-0 text-red-400" />
+            <span>{error}</span>
+          </div>
+        )}
 
         {/* Card Arena */}
         {currentCard ? (

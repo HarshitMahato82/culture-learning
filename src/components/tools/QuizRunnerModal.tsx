@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { X, HelpCircle, Sparkles, RefreshCw, CheckCircle2, XCircle, Award, ArrowRight, RotateCcw } from 'lucide-react';
+import { X, HelpCircle, Sparkles, RefreshCw, CheckCircle2, XCircle, Award, ArrowRight, RotateCcw, AlertCircle } from 'lucide-react';
 import { QuizData, UserProfile } from '../../types';
 import { recordLearningActivity } from '../../lib/dataService';
+import { supabase } from '../../lib/supabase';
 
 interface QuizRunnerModalProps {
   isOpen: boolean;
@@ -13,6 +14,7 @@ export const QuizRunnerModal: React.FC<QuizRunnerModalProps> = ({ isOpen, onClos
   const [topic, setTopic] = useState('Kinematics & Motion');
   const [questionCount, setQuestionCount] = useState<number>(5);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [quizData, setQuizData] = useState<QuizData | null>(null);
   
   // Quiz State
@@ -28,15 +30,26 @@ export const QuizRunnerModal: React.FC<QuizRunnerModalProps> = ({ isOpen, onClos
     if (!targetTopic.trim() || loading) return;
 
     setLoading(true);
+    setError(null);
     setIsSubmitted(false);
     setSelectedAnswers({});
     setShowExplanation({});
     setCurrentQuestionIndex(0);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+        setError('Authentication required. Please sign in to continue.');
+        return;
+      }
+
       const res = await fetch('/api/tools/quiz', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({
           topic: targetTopic,
           questionCount,
@@ -45,11 +58,18 @@ export const QuizRunnerModal: React.FC<QuizRunnerModalProps> = ({ isOpen, onClos
       });
       const text = await res.text();
       const json = text ? JSON.parse(text) : {};
+
+      if (!res.ok || json.error) {
+        setError(json.error || "CULTURE AI couldn't complete that request right now. Please try again.");
+        return;
+      }
+
       if (json.quiz) {
         setQuizData(json.quiz);
       }
     } catch (err) {
       console.error('Quiz error:', err);
+      setError("CULTURE AI couldn't complete that request right now. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -134,6 +154,14 @@ export const QuizRunnerModal: React.FC<QuizRunnerModalProps> = ({ isOpen, onClos
             </button>
           </div>
         </div>
+
+        {/* Error Alert Banner */}
+        {error && (
+          <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs sm:text-sm flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 shrink-0 text-red-400" />
+            <span>{error}</span>
+          </div>
+        )}
 
         {/* Quiz Content */}
         {quizData ? (

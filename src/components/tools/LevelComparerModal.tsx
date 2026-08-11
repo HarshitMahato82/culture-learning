@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { X, Layers, Sparkles, RefreshCw, BookOpen, Compass, GraduationCap, Library, ArrowRight } from 'lucide-react';
+import { X, Layers, Sparkles, RefreshCw, BookOpen, Compass, GraduationCap, Library, ArrowRight, AlertCircle } from 'lucide-react';
 import { LevelAdaptation } from '../../types';
 import { MarkdownRenderer } from '../MarkdownRenderer';
+import { supabase } from '../../lib/supabase';
 
 interface LevelComparerModalProps {
   isOpen: boolean;
@@ -11,6 +12,7 @@ interface LevelComparerModalProps {
 export const LevelComparerModal: React.FC<LevelComparerModalProps> = ({ isOpen, onClose }) => {
   const [topic, setTopic] = useState('Photosynthesis');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<LevelAdaptation | null>({
     topic: 'Photosynthesis',
     adaptations: {
@@ -28,19 +30,37 @@ export const LevelComparerModal: React.FC<LevelComparerModalProps> = ({ isOpen, 
     if (!targetTopic.trim() || loading) return;
 
     setLoading(true);
+    setError(null);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+        setError('Authentication required. Please sign in to continue.');
+        return;
+      }
+
       const res = await fetch('/api/tools/compare-levels', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({ topic: targetTopic }),
       });
       const text = await res.text();
       const json = text ? JSON.parse(text) : {};
+
+      if (!res.ok || json.error) {
+        setError(json.error || "CULTURE AI couldn't complete that request right now. Please try again.");
+        return;
+      }
+
       if (json.adaptations) {
         setData(json);
       }
     } catch (err) {
       console.error('Failed to compare levels:', err);
+      setError("CULTURE AI couldn't complete that request right now. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -108,6 +128,14 @@ export const LevelComparerModal: React.FC<LevelComparerModalProps> = ({ isOpen, 
             ))}
           </div>
         </div>
+
+        {/* Error Alert Banner */}
+        {error && (
+          <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs sm:text-sm flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 shrink-0 text-red-400" />
+            <span>{error}</span>
+          </div>
+        )}
 
         {/* 4 Cards Display Grid */}
         {data && (
