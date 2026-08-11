@@ -3,25 +3,22 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import { defineConfig } from 'vite';
 
-export default defineConfig(() => {
+export default defineConfig(({ command, mode }) => {
+  const isProduction = mode === 'production' || command === 'build' || process.env.NODE_ENV === 'production';
+  const isHmrDisabled = isProduction || process.env.DISABLE_HMR === 'true';
+
   return {
     plugins: [react(), tailwindcss()],
-
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
     },
-
     server: {
-      // Allow the Render production hostname
-      allowedHosts: ['culture-ai-s7na.onrender.com'],
-
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      hmr: process.env.DISABLE_HMR !== 'true',
-
-      // Disable file watching when DISABLE_HMR is true.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      // HMR is disabled in production or when DISABLE_HMR env var is set
+      hmr: isHmrDisabled ? false : true,
+      // Disable file watching when HMR is disabled to save CPU
+      watch: isHmrDisabled ? null : {},
     },
   };
 });
