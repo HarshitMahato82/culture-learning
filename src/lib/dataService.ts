@@ -8,6 +8,7 @@ import {
   LearningActivityType, 
   LearningActivityRecord, 
   DashboardCalculatedStats,
+  WeakTopic,
   Conversation,
   ChatMessage
 } from '../types';
@@ -413,6 +414,112 @@ export async function recordLearningActivity(
   };
 }
 
+// Helper to extract weak topics from activity records where activity_type === 'question_answered' and isCorrect === false
+function extractWeakTopics(activities: any[]): WeakTopic[] {
+  if (!activities || !Array.isArray(activities)) return [];
+
+  const now = Date.now();
+  const map: Record<
+    string,
+    {
+      subject: string;
+      topic: string;
+      incorrectCount: number;
+      recentIncorrectCount: number;
+      latestTimestamp: number;
+      lastMistakeAt?: string;
+      recencyScore: number;
+    }
+  > = {};
+
+  for (const act of activities) {
+    if (!act) continue;
+    try {
+      const type = act.activity_type || act.activityType;
+      if (type === 'question_answered') {
+        let meta = act.metadata;
+        if (typeof meta === 'string') {
+          try {
+            meta = JSON.parse(meta);
+          } catch {
+            meta = {};
+          }
+        }
+        if (meta && typeof meta === 'object' && meta.isCorrect === false) {
+          const rawSub = (act.subject || 'General').toString().trim();
+          const rawTop = (act.topic || 'General Study').toString().trim();
+          if (rawSub && rawTop) {
+            // Determine timestamp of activity
+            const tsRaw = act.created_at || act.createdAt || act.timestamp;
+            let actTime = now;
+            if (tsRaw) {
+              const parsed = new Date(tsRaw).getTime();
+              if (!isNaN(parsed)) {
+                actTime = parsed;
+              }
+            }
+
+            const ageMs = Math.max(0, now - actTime);
+            const ageDays = ageMs / (1000 * 60 * 60 * 24);
+
+            // Recency weighting: 7-day half-life decay formula
+            const weight = Math.pow(0.5, ageDays / 7);
+
+            const key = `${rawSub.toLowerCase()}:::${rawTop.toLowerCase()}`;
+            if (!map[key]) {
+              map[key] = {
+                subject: rawSub,
+                topic: rawTop,
+                incorrectCount: 0,
+                recentIncorrectCount: 0,
+                latestTimestamp: 0,
+                lastMistakeAt: undefined,
+                recencyScore: 0,
+              };
+            }
+
+            map[key].incorrectCount += 1;
+            if (ageDays <= 14) {
+              map[key].recentIncorrectCount += 1;
+            }
+            map[key].recencyScore += weight;
+
+            if (actTime > map[key].latestTimestamp) {
+              map[key].latestTimestamp = actTime;
+              map[key].lastMistakeAt = new Date(actTime).toISOString();
+            }
+          }
+        }
+      }
+    } catch {
+      // Safely ignore malformed activity rows
+    }
+  }
+
+  return Object.values(map)
+    .map((item) => ({
+      subject: item.subject,
+      topic: item.topic,
+      incorrectCount: item.incorrectCount,
+      recentIncorrectCount: item.recentIncorrectCount,
+      lastMistakeAt: item.lastMistakeAt,
+      recencyScore: Math.round(item.recencyScore * 100) / 100,
+    }))
+    .sort((a, b) => {
+      const scoreA = a.recencyScore ?? a.incorrectCount;
+      const scoreB = b.recencyScore ?? b.incorrectCount;
+      if (scoreB !== scoreA) {
+        return scoreB - scoreA;
+      }
+      const recentA = a.recentIncorrectCount ?? a.incorrectCount;
+      const recentB = b.recentIncorrectCount ?? b.incorrectCount;
+      if (recentB !== recentA) {
+        return recentB - recentA;
+      }
+      return b.incorrectCount - a.incorrectCount;
+    });
+}
+
 // -------------------------------------------------------------
 // CALCULATED DASHBOARD STATS (STRICTLY USER-SCOPED)
 // -------------------------------------------------------------
@@ -430,6 +537,7 @@ export async function fetchCalculatedDashboardStats(
     totalActivitiesCount: 0,
     savedHoursPerWeek: 0,
     topicProgressList: [],
+    weakTopics: [],
   };
 
   if (!userId) return fallbackStats;
@@ -448,6 +556,9 @@ export async function fetchCalculatedDashboardStats(
 
       const totalActivitiesCount = activities?.length || 0;
       fallbackStats.totalActivitiesCount = totalActivitiesCount;
+
+      // Extract weak topics from quiz question records
+      fallbackStats.weakTopics = extractWeakTopics(activities || []);
 
       // 2. Fetch user chat sessions
       const { data: chatSessions } = await supabase
@@ -516,6 +627,9 @@ export async function fetchCalculatedDashboardStats(
       fallbackStats.totalActivitiesCount = actCount;
       fallbackStats.totalSessionsCount = chats.length;
 
+      // Extract weak topics from offline activities
+      fallbackStats.weakTopics = extractWeakTopics(acts);
+
       if (actCount === 0) {
         fallbackStats.overallProgressPercent = 0;
         fallbackStats.masteredUnits = 0;
@@ -568,12 +682,18 @@ export async function fetchUserConversations(userId: string): Promise<Conversati
   }
 
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const activeUserId = session?.user?.id || userId;
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-    if (!activeUserId) {
+    if (sessionError) {
+      console.warn('Supabase session retrieval error in fetchUserConversations:', sessionError.message);
       return localConvs;
     }
+
+    if (!session || !session.user) {
+      return localConvs;
+    }
+
+    const activeUserId = session.user.id;
 
     const activeLocalConvs = activeUserId !== userId ? getOfflineConversations(activeUserId) : localConvs;
     const offlineList = activeLocalConvs.length > 0 ? activeLocalConvs : localConvs;
@@ -699,13 +819,19 @@ export async function saveConversationSession(userId: string, conv: Conversation
   if (!isSupabaseConfigured) return;
 
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const effectiveUserId = session?.user?.id || userId;
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-    if (!effectiveUserId) {
-      console.warn('saveConversationSession: Missing authenticated user ID');
+    if (sessionError) {
+      console.warn('Supabase session retrieval error in saveConversationSession:', sessionError.message);
       return;
     }
+
+    if (!session || !session.user) {
+      console.warn('Chat persistence skipped: no active Supabase authentication session.');
+      return;
+    }
+
+    const effectiveUserId = session.user.id;
 
     // 1. Upsert session row into chat_sessions
     const { error: sessErr } = await supabase
@@ -719,8 +845,7 @@ export async function saveConversationSession(userId: string, conv: Conversation
       }, { onConflict: 'id' });
 
     if (sessErr) {
-      console.warn('Supabase chat_sessions upsert warning:', sessErr.message);
-      return;
+      console.error('Supabase chat_sessions upsert error:', sessErr);
     }
 
     // 2. Upsert message rows into chat_messages
@@ -744,11 +869,11 @@ export async function saveConversationSession(userId: string, conv: Conversation
         .upsert(msgPayloads, { onConflict: 'id' });
 
       if (msgErr) {
-        console.warn('Supabase chat_messages upsert warning:', msgErr.message);
+        console.error('Supabase chat_messages upsert error:', msgErr);
       }
     }
   } catch (err) {
-    console.warn('Error saving conversation session (offline/network):', err);
+    console.error('Error saving conversation session to Supabase:', err);
   }
 }
 
@@ -770,15 +895,25 @@ export async function deleteConversationSession(userId: string, sessionId: strin
   if (!isSupabaseConfigured) return;
 
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const effectiveUserId = session?.user?.id || userId;
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError || !session || !session.user) {
+      console.warn('Delete conversation skipped: no active Supabase authentication session.');
+      return;
+    }
+
+    const effectiveUserId = session.user.id;
 
     // Delete chat messages first to avoid Foreign Key constraint error on chat_sessions
-    await supabase
+    const { error: msgErr } = await supabase
       .from('chat_messages')
       .delete()
       .eq('session_id', sessionId)
       .eq('user_id', effectiveUserId);
+
+    if (msgErr) {
+      console.error('Supabase delete chat_messages error:', msgErr);
+    }
 
     const { error: delErr } = await supabase
       .from('chat_sessions')
@@ -787,10 +922,10 @@ export async function deleteConversationSession(userId: string, sessionId: strin
       .eq('user_id', effectiveUserId);
 
     if (delErr) {
-      console.warn('Supabase delete chat_sessions warning:', delErr.message);
+      console.error('Supabase delete chat_sessions error:', delErr);
     }
   } catch (err) {
-    console.warn('Error deleting conversation session (offline/network):', err);
+    console.error('Error deleting conversation session from Supabase:', err);
   }
 }
 
@@ -806,20 +941,34 @@ export async function deleteAllUserConversations(userId: string): Promise<void> 
   if (!isSupabaseConfigured) return;
 
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const effectiveUserId = session?.user?.id || userId;
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-    await supabase
+    if (sessionError || !session || !session.user) {
+      console.warn('Delete all conversations skipped: no active Supabase authentication session.');
+      return;
+    }
+
+    const effectiveUserId = session.user.id;
+
+    const { error: msgErr } = await supabase
       .from('chat_messages')
       .delete()
       .eq('user_id', effectiveUserId);
 
-    await supabase
+    if (msgErr) {
+      console.error('Supabase delete all chat_messages error:', msgErr);
+    }
+
+    const { error: sessErr } = await supabase
       .from('chat_sessions')
       .delete()
       .eq('user_id', effectiveUserId);
+
+    if (sessErr) {
+      console.error('Supabase delete all chat_sessions error:', sessErr);
+    }
   } catch (err) {
-    console.warn('Error deleting all user conversations:', err);
+    console.error('Error deleting all user conversations from Supabase:', err);
   }
 }
 

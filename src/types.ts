@@ -44,6 +44,15 @@ export interface LearningActivityRecord {
   createdAt?: string;
 }
 
+export interface WeakTopic {
+  subject: string;
+  topic: string;
+  incorrectCount: number;
+  recentIncorrectCount?: number;
+  lastMistakeAt?: string;
+  recencyScore?: number;
+}
+
 export interface DashboardCalculatedStats {
   overallProgressPercent: number;
   masteredUnits: number;
@@ -54,6 +63,7 @@ export interface DashboardCalculatedStats {
   totalActivitiesCount: number;
   savedHoursPerWeek: number;
   topicProgressList: TopicProgress[];
+  weakTopics: WeakTopic[];
 }
 
 export interface ChatMessage {

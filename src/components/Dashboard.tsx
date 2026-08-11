@@ -73,6 +73,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     totalActivitiesCount: 0,
     savedHoursPerWeek: 0,
     topicProgressList: [],
+    weakTopics: [],
   });
 
   useEffect(() => {
@@ -148,8 +149,77 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const currentMilestones = getSubjectMilestones(selectedSubjectPath);
 
-  // Calculate recommended next topic based on student's main subject, education level, and current progress
+  // Calculate recommended next topic based on student's main subject, learning goals, weak topics, and progress
   const getRecommendedNextTopic = (subject: string) => {
+    const normSubject = (subject || '').toLowerCase().trim();
+
+    // Helper for formatting user goal text naturally
+    const goalText = user.goal ? user.goal.trim() : '';
+    const goalPhrase = goalText
+      ? goalText.toLowerCase().includes('exam') || goalText.toLowerCase().includes('test')
+        ? ` for your ${goalText}`
+        : ` to support your goal: ${goalText}`
+      : '';
+
+    // PRIORITY 1 — RECENT DIFFICULTY
+    // Look at weakTopics matching the currently selected subject strictly
+    const relevantWeakTopics = (stats.weakTopics || [])
+      .filter((wt) => (wt.subject || '').toLowerCase().trim() === normSubject)
+      .sort((a, b) => {
+        const scoreA = a.recencyScore ?? a.incorrectCount;
+        const scoreB = b.recencyScore ?? b.incorrectCount;
+        if (scoreB !== scoreA) {
+          return scoreB - scoreA;
+        }
+        const recentA = a.recentIncorrectCount ?? a.incorrectCount;
+        const recentB = b.recentIncorrectCount ?? b.incorrectCount;
+        if (recentB !== recentA) {
+          return recentB - recentA;
+        }
+        return b.incorrectCount - a.incorrectCount;
+      });
+
+    if (relevantWeakTopics.length > 0) {
+      const topWeak = relevantWeakTopics[0];
+      const isSingleMistake = topWeak.incorrectCount === 1;
+
+      const descText = isSingleMistake
+        ? `Review ${topWeak.topic} — strengthen this topic${goalPhrase}.`
+        : `Review ${topWeak.topic} — strengthen this topic based on recent practice${goalPhrase}.`;
+
+      return {
+        id: `weak-${topWeak.subject}-${topWeak.topic}`,
+        step: 'Review',
+        title: `Review ${topWeak.topic}`,
+        desc: descText,
+        status: 'in_progress',
+        progress: 50,
+        prompt: `I need help reviewing and practicing ${topWeak.topic} in ${subject} suitable for ${levelMeta.title} level${goalText ? ` to support my goal: ${goalText}` : ''}. Please guide me step-by-step through key concepts and targeted practice problems.`,
+      };
+    }
+
+    // PRIORITY 2 — LOW PROGRESS
+    // Look at topicProgressList matching the currently selected subject strictly with progress < 80%
+    const relevantLowProgress = (stats.topicProgressList || [])
+      .filter((tp) => (tp.subject || '').toLowerCase().trim() === normSubject && tp.progressPercent < 80)
+      .sort((a, b) => a.progressPercent - b.progressPercent);
+
+    if (relevantLowProgress.length > 0) {
+      const lowestProg = relevantLowProgress[0];
+
+      return {
+        id: `lowprog-${lowestProg.subject}-${lowestProg.topic}`,
+        step: 'Focus',
+        title: `Practice ${lowestProg.topic}`,
+        desc: `Practice ${lowestProg.topic} — increase your mastery from ${lowestProg.progressPercent}%${goalPhrase}.`,
+        status: 'in_progress',
+        progress: lowestProg.progressPercent,
+        prompt: `I want to practice and improve my understanding of ${lowestProg.topic} in ${subject} suitable for ${levelMeta.title} level${goalText ? ` to support my goal: ${goalText}` : ''}. Give me key explanations and targeted practice exercises.`,
+      };
+    }
+
+    // PRIORITY 3 — EXISTING MILESTONE SYSTEM
+    // Fall back to existing 4-unit milestone system
     const milestones = getSubjectMilestones(subject);
     const inProgress = milestones.find((m) => m.status === 'in_progress');
     if (inProgress) return inProgress;
@@ -308,7 +378,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   <span>Recommended Next</span>
                 </span>
                 <span className="text-[9px] font-mono font-extrabold uppercase px-2 py-0.5 rounded bg-purple-500/20 border border-purple-400/30 text-purple-200">
-                  Unit {nextTopic.step}
+                  {nextTopic.step.toLowerCase().startsWith('unit') ? nextTopic.step : `Unit ${nextTopic.step}`}
                 </span>
               </div>
 
@@ -340,8 +410,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <p className="text-base font-black text-white line-clamp-1 group-hover:text-purple-200 transition-colors">
                 {nextTopic.title}
               </p>
-              <p className="text-[11px] text-slate-400 mt-1 line-clamp-1 font-medium">
-                {selectedSubjectPath} • {levelMeta.title}
+              <p className="text-[11px] text-slate-400 mt-1 line-clamp-2 font-medium">
+                {nextTopic.desc}
               </p>
             </div>
 
@@ -349,7 +419,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
               onClick={() => onStartNewChat(nextTopic.prompt)}
               className="mt-3 pt-2 border-t border-white/10 flex items-center justify-between text-xs font-bold text-purple-300 group-hover:text-white transition-colors cursor-pointer"
             >
-              <span className="uppercase text-[10px]">Start Next Unit</span>
+              <span className="uppercase text-[10px]">
+                {nextTopic.step === 'Review' ? 'Start Review' : nextTopic.step === 'Focus' ? 'Start Practice' : 'Start Next Unit'}
+              </span>
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-100" />
             </div>
           </motion.div>
