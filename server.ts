@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
@@ -487,8 +488,15 @@ Output JSON only with array of objects having "front" and "back".`;
 });
 
 async function startServer() {
+  const isProduction =
+    process.env.NODE_ENV === "production" ||
+    process.env.RENDER === "true" ||
+    (process.env.NODE_ENV !== "development" &&
+      fs.existsSync(path.join(process.cwd(), "dist", "index.html")) &&
+      Boolean(process.argv[1]?.includes("dist")));
+
   // Vite middleware for dev
-  if (process.env.NODE_ENV !== "production") {
+  if (!isProduction) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
