@@ -18,6 +18,7 @@ import {
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { UserRole, EducationLevel, UserProfile } from '../types';
 import { upsertUserProfile } from '../lib/dataService';
+import { useToast } from '../context/ToastContext';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -36,6 +37,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   initialRole = 'student',
   pendingProfile,
 }) => {
+  const { showSuccess, showError } = useToast();
   const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>(initialMode);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -373,6 +375,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     if (!isSupabaseConfigured) {
       setTimeout(() => {
         setSuccessMessage('Password reset instructions sent (simulated mode).');
+        showSuccess('Password reset link sent (simulated mode).');
         setLoading(false);
       }, 500);
       return;
@@ -386,8 +389,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       if (error) throw error;
 
       setSuccessMessage('Password reset link sent to your email address!');
+      showSuccess('Password reset link sent to your email address!');
     } catch (err: any) {
-      setErrorMessage(err?.message || 'Failed to send password reset email.');
+      const msg = err?.message || 'Failed to send password reset email.';
+      setErrorMessage(msg);
+      showError(msg);
     } finally {
       setLoading(false);
     }
@@ -408,6 +414,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {/* Close button */}
         <button
           onClick={onClose}
+          aria-label="Close modal"
           className="absolute top-5 right-5 p-2 rounded-full border border-white/10 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
         >
           <X className="w-4 h-4" />
@@ -542,7 +549,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="student@example.com"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-950/80 border border-white/15 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400 transition-colors"
+                    className={`w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-950/80 border border-white/15 text-sm text-white placeholder-slate-500 focus:outline-none transition-colors ${
+                      role === 'teacher' ? 'focus:border-amber-400 focus:ring-1 focus:ring-amber-400/40' : 'focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/40'
+                    }`}
                   />
                 </div>
               </div>
@@ -572,7 +581,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-950/80 border border-white/15 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400 transition-colors"
+                    className={`w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-950/80 border border-white/15 text-sm text-white placeholder-slate-500 focus:outline-none transition-colors ${
+                      role === 'teacher' ? 'focus:border-amber-400 focus:ring-1 focus:ring-amber-400/40' : 'focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/40'
+                    }`}
                   />
                 </div>
               </div>
@@ -598,7 +609,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <form onSubmit={handleSignUp} className="space-y-3.5">
               {/* Role Selection Toggle */}
               <div className="space-y-1">
-                <label className="text-[10px] font-mono font-bold text-slate-300 uppercase tracking-wider block">
+                <label className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider block">
                   Select Account Role
                 </label>
                 <div className="grid grid-cols-2 gap-2">
@@ -632,7 +643,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
               {/* Full Name */}
               <div className="space-y-1">
-                <label className="text-[11px] font-mono font-bold text-slate-300 uppercase tracking-wider block">
+                <label className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider block">
                   Full Name
                 </label>
                 <div className="relative">
@@ -643,14 +654,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder={role === 'teacher' ? 'Prof. Sarah Davis' : 'Alex Morgan'}
-                    className="w-full pl-10 pr-4 py-2 rounded-2xl bg-slate-950/80 border border-white/15 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400 transition-colors"
+                    className={`w-full pl-10 pr-4 py-2 rounded-2xl bg-slate-950/80 border border-white/15 text-xs text-white placeholder-slate-500 focus:outline-none transition-colors ${
+                      role === 'teacher' ? 'focus:border-amber-400 focus:ring-1 focus:ring-amber-400/40' : 'focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/40'
+                    }`}
                   />
                 </div>
               </div>
 
               {/* Email Address */}
               <div className="space-y-1">
-                <label className="text-[11px] font-mono font-bold text-slate-300 uppercase tracking-wider block">
+                <label className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider block">
                   Email Address
                 </label>
                 <div className="relative">
@@ -661,20 +674,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="user@school.edu"
-                    className="w-full pl-10 pr-4 py-2 rounded-2xl bg-slate-950/80 border border-white/15 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400 transition-colors"
+                    className={`w-full pl-10 pr-4 py-2 rounded-2xl bg-slate-950/80 border border-white/15 text-xs text-white placeholder-slate-500 focus:outline-none transition-colors ${
+                      role === 'teacher' ? 'focus:border-amber-400 focus:ring-1 focus:ring-amber-400/40' : 'focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/40'
+                    }`}
                   />
                 </div>
               </div>
 
               {/* Education Level */}
               <div className="space-y-1">
-                <label className="text-[10px] font-mono font-bold text-slate-300 uppercase tracking-wider block">
+                <label className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider block">
                   {role === 'teacher' ? 'Target Grade Level Taught' : 'Education Level'}
                 </label>
                 <select
                   value={educationLevel}
                   onChange={(e) => setEducationLevel(e.target.value as EducationLevel)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-950/80 border border-white/15 text-xs text-white focus:outline-none focus:border-indigo-400 cursor-pointer"
+                  className={`w-full px-3 py-2 rounded-xl bg-slate-950/80 border border-white/15 text-xs text-white focus:outline-none cursor-pointer ${
+                    role === 'teacher' ? 'focus:border-amber-400 focus:ring-1 focus:ring-amber-400/40' : 'focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/40'
+                  }`}
                 >
                   <option value="primary" className="bg-slate-900 text-white">Primary School (K-5)</option>
                   <option value="middle" className="bg-slate-900 text-white">Middle School (6-8)</option>
@@ -686,7 +703,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               {/* Passwords */}
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-mono font-bold text-slate-300 uppercase tracking-wider block">
+                  <label className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider block">
                     Password
                   </label>
                   <input
@@ -695,12 +712,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full px-3 py-2 rounded-xl bg-slate-950/80 border border-white/15 text-xs text-white focus:outline-none focus:border-indigo-400"
+                    className={`w-full px-3 py-2 rounded-xl bg-slate-950/80 border border-white/15 text-xs text-white focus:outline-none ${
+                      role === 'teacher' ? 'focus:border-amber-400 focus:ring-1 focus:ring-amber-400/40' : 'focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/40'
+                    }`}
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-mono font-bold text-slate-300 uppercase tracking-wider block">
+                  <label className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider block">
                     Confirm Password
                   </label>
                   <input
@@ -709,7 +728,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full px-3 py-2 rounded-xl bg-slate-950/80 border border-white/15 text-xs text-white focus:outline-none focus:border-indigo-400"
+                    className={`w-full px-3 py-2 rounded-xl bg-slate-950/80 border border-white/15 text-xs text-white focus:outline-none ${
+                      role === 'teacher' ? 'focus:border-amber-400 focus:ring-1 focus:ring-amber-400/40' : 'focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/40'
+                    }`}
                   />
                 </div>
               </div>

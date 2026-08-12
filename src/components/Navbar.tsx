@@ -77,6 +77,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={() => setShowUserDropdown(!showUserDropdown)}
+                aria-label="User account menu"
+                aria-expanded={showUserDropdown}
                 className="flex items-center gap-2.5 px-4 py-2 rounded-full border border-indigo-400/40 bg-gradient-to-r from-indigo-600/30 via-purple-600/30 to-sky-500/30 hover:border-indigo-300 text-white text-xs sm:text-sm font-extrabold tracking-wide transition-all shadow-lg shadow-indigo-500/20 glass-pill cursor-pointer group"
               >
                 {user.role === 'teacher' ? (
@@ -100,12 +102,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                   >
                     <div className="px-3 py-2 border-b border-white/10 space-y-0.5">
                       <p className="font-extrabold text-sm text-white truncate">{user.name}</p>
-                      {user.email && <p className="text-[11px] text-slate-400 truncate">{user.email}</p>}
+                      {user.email && <p className="text-xs text-slate-400 truncate">{user.email}</p>}
                       <div className="pt-1 flex items-center gap-1.5">
-                        <span className="px-2 py-0.5 rounded-md bg-indigo-950 text-indigo-300 border border-indigo-400/30 font-mono font-bold uppercase text-[10px]">
+                        <span className="px-2 py-0.5 rounded-md bg-indigo-950 text-indigo-300 border border-indigo-400/30 font-mono font-bold uppercase text-xs">
                           {user.role}
                         </span>
-                        <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 font-mono font-bold uppercase text-[10px]">
+                        <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 font-mono font-bold uppercase text-xs">
                           {user.educationLevel.replace('_', ' ')}
                         </span>
                       </div>

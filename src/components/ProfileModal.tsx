@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UserProfile, EducationLevel, UserRole } from '../types';
 import { EDUCATION_LEVELS } from '../data/personas';
 import { motion, AnimatePresence } from 'motion/react';
+import { useToast } from '../context/ToastContext';
 import { 
   X, 
   User, 
@@ -57,6 +58,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   user,
   onSaveProfile,
 }) => {
+  const { showSuccess, showError } = useToast();
   const [name, setName] = useState(user.name || '');
   const [educationLevel, setEducationLevel] = useState<EducationLevel>(user.educationLevel || 'high_school');
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>(user.subjects || ['Physics', 'Mathematics']);
@@ -86,8 +88,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const toggleSubject = (subj: string) => {
     if (selectedSubjects.includes(subj)) {
       if (selectedSubjects.length <= 1) {
-        setErrorMessage('At least one subject must be selected.');
-        setTimeout(() => setErrorMessage(''), 3000);
+        showError('At least one subject must be selected.');
         return;
       }
       setSelectedSubjects(selectedSubjects.filter(s => s !== subj));
@@ -107,11 +108,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
-      setErrorMessage('Name cannot be empty.');
+      showError('Name cannot be empty.');
       return;
     }
     if (selectedSubjects.length === 0) {
-      setErrorMessage('Please select at least one subject.');
+      showError('Please select at least one subject.');
       return;
     }
 
@@ -131,13 +132,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
       await onSaveProfile(updatedProfile);
       setSaveSuccess(true);
+      showSuccess('Profile updated successfully!');
       setTimeout(() => {
         setSaveSuccess(false);
         onClose();
-      }, 900);
+      }, 600);
     } catch (err: any) {
       console.error('Error saving profile:', err);
-      setErrorMessage('Failed to save profile changes. Please try again.');
+      showError('Failed to save profile changes. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -155,6 +157,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         {/* Close Button */}
         <button
           onClick={onClose}
+          aria-label="Close modal"
           className="absolute top-5 right-5 p-2 rounded-full bg-white/5 border border-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
         >
           <X className="w-5 h-5" />

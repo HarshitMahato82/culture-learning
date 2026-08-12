@@ -672,6 +672,66 @@ function getOfflineConversations(userId: string): Conversation[] {
   return [];
 }
 
+export async function migrateLocalConversationsToSupabase(userId: string): Promise<void> {
+  if (!userId || !isSupabaseConfigured) return;
+
+  const markerKey = `culture_ai_chat_migration_v1_${userId}`;
+
+  try {
+    if (typeof window !== 'undefined' && localStorage.getItem(markerKey)) {
+      return;
+    }
+
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError) {
+      console.warn('Supabase session retrieval error in migrateLocalConversationsToSupabase:', sessionError.message);
+      return;
+    }
+
+    if (!session || !session.user) {
+      console.warn('Migration skipped: no active Supabase authentication session.');
+      return;
+    }
+
+    if (session.user.id !== userId) {
+      console.warn('Migration skipped: requested userId does not match authenticated session user id.');
+      return;
+    }
+
+    const localConvs = getOfflineConversations(userId);
+    if (!localConvs || localConvs.length === 0) {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(markerKey, 'completed');
+      }
+      return;
+    }
+
+    let allSucceeded = true;
+
+    for (const conv of localConvs) {
+      try {
+        if (!conv || !conv.id || !Array.isArray(conv.messages) || conv.messages.length === 0) {
+          continue;
+        }
+        const success = await saveConversationSession(userId, conv);
+        if (!success) {
+          allSucceeded = false;
+        }
+      } catch (err) {
+        console.error('Error migrating individual conversation session:', err);
+        allSucceeded = false;
+      }
+    }
+
+    if (allSucceeded && typeof window !== 'undefined') {
+      localStorage.setItem(markerKey, 'completed');
+    }
+  } catch (err) {
+    console.error('Error in migrateLocalConversationsToSupabase:', err);
+  }
+}
+
 export async function fetchUserConversations(userId: string): Promise<Conversation[]> {
   if (!userId) return [];
 
@@ -694,6 +754,9 @@ export async function fetchUserConversations(userId: string): Promise<Conversati
     }
 
     const activeUserId = session.user.id;
+
+    // Run one-time migration of localStorage conversations for active authenticated user if needed
+    await migrateLocalConversationsToSupabase(activeUserId);
 
     const activeLocalConvs = activeUserId !== userId ? getOfflineConversations(activeUserId) : localConvs;
     const offlineList = activeLocalConvs.length > 0 ? activeLocalConvs : localConvs;
@@ -797,11 +860,11 @@ export async function purgeEmptyConversations(
   return remaining;
 }
 
-export async function saveConversationSession(userId: string, conv: Conversation): Promise<void> {
-  if (!userId || !conv?.id) return;
+export async function saveConversationSession(userId: string, conv: Conversation): Promise<boolean> {
+  if (!userId || !conv?.id) return false;
 
   // Do not save empty conversations with zero messages to persistent storage
-  if (!conv.messages || conv.messages.length === 0) return;
+  if (!conv.messages || conv.messages.length === 0) return true;
 
   const validSessionId = ensureUUID(conv.id);
   conv.id = validSessionId;
@@ -816,19 +879,19 @@ export async function saveConversationSession(userId: string, conv: Conversation
     console.warn('Error backing up conversation to localStorage:', e);
   }
 
-  if (!isSupabaseConfigured) return;
+  if (!isSupabaseConfigured) return false;
 
   try {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
     if (sessionError) {
       console.warn('Supabase session retrieval error in saveConversationSession:', sessionError.message);
-      return;
+      return false;
     }
 
     if (!session || !session.user) {
       console.warn('Chat persistence skipped: no active Supabase authentication session.');
-      return;
+      return false;
     }
 
     const effectiveUserId = session.user.id;
@@ -846,6 +909,7 @@ export async function saveConversationSession(userId: string, conv: Conversation
 
     if (sessErr) {
       console.error('Supabase chat_sessions upsert error:', sessErr);
+      return false;
     }
 
     // 2. Upsert message rows into chat_messages
@@ -870,10 +934,14 @@ export async function saveConversationSession(userId: string, conv: Conversation
 
       if (msgErr) {
         console.error('Supabase chat_messages upsert error:', msgErr);
+        return false;
       }
     }
+
+    return true;
   } catch (err) {
     console.error('Error saving conversation session to Supabase:', err);
+    return false;
   }
 }
 

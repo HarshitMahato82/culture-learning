@@ -75,7 +75,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({
   };
 
   return (
-    <div className="min-h-[calc(100vh-4.5rem)] bg-[#0A0A0C] text-[#E5E7EB] flex items-center justify-center p-4 sm:p-6 relative overflow-hidden font-sans">
+    <div className="min-h-[calc(100vh-4.5rem)] bg-slate-950 text-[#E5E7EB] flex items-center justify-center p-4 sm:p-6 relative overflow-hidden font-sans">
       
       {/* Background blur elements */}
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-[#3B82F6] rounded-full blur-[160px] opacity-10 pointer-events-none" />
@@ -88,7 +88,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({
             if (step > 1) setStep(step - 1);
             else onBackToLanding();
           }}
-          className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-gray-400 hover:text-white transition-colors mb-6"
+          className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 hover:text-white transition-colors mb-6"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>{step > 1 ? 'Previous Step' : 'Back to Home'}</span>

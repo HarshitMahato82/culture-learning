@@ -253,7 +253,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             
             {/* Role & Level Pill */}
             <div className="flex flex-wrap items-center gap-2">
-              <span className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[11px] font-mono font-extrabold uppercase tracking-widest shadow-lg ${
+              <span className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-mono font-extrabold uppercase tracking-widest shadow-lg ${
                 isTeacher 
                   ? 'bg-amber-500/20 text-amber-300 border border-amber-400/40 shadow-amber-500/20 backdrop-blur-md' 
                   : 'bg-indigo-500/25 text-indigo-200 border border-indigo-400/40 shadow-indigo-500/20 backdrop-blur-md'
@@ -262,7 +262,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <span>{isTeacher ? 'TEACHER CO-PILOT' : levelMeta.title.toUpperCase()}</span>
               </span>
 
-              <span className="text-[11px] font-mono font-bold text-cyan-200 bg-cyan-950/70 px-4 py-1.5 rounded-full border border-cyan-400/40 shadow-lg backdrop-blur-md">
+              <span className="text-xs font-mono font-bold text-cyan-200 bg-cyan-950/70 px-4 py-1.5 rounded-full border border-cyan-400/40 shadow-lg backdrop-blur-md">
                 {user.language || 'ENGLISH'}
               </span>
             </div>
@@ -276,7 +276,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
             {/* Subjects & Goal */}
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-200">
-              <span className="font-bold text-slate-300 uppercase tracking-wider text-[10px]">
+              <span className="font-bold text-slate-300 uppercase tracking-wider text-xs">
                 {isTeacher ? 'Subjects:' : 'Focus Subjects:'}
               </span>
               {user.subjects.map((sub, i) => (

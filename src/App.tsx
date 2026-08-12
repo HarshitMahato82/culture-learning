@@ -11,6 +11,7 @@ import { QuizRunnerModal } from './components/tools/QuizRunnerModal';
 import { LessonPlanModal } from './components/tools/LessonPlanModal';
 import { FlashcardsModal } from './components/tools/FlashcardsModal';
 import { ProfileModal } from './components/ProfileModal';
+import { useToast } from './context/ToastContext';
 import { DEMO_PRESETS } from './data/demoPresets';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { 
@@ -30,6 +31,7 @@ const STORAGE_KEY_ACTIVE_VIEW = 'culture_ai_active_view_v2';
 const STORAGE_KEY_ACTIVE_CONV = 'culture_ai_active_conv_v2';
 
 export default function App() {
+  const { showSuccess, showError, showInfo } = useToast();
   const [user, setUser] = useState<UserProfile | null>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_USER);
@@ -211,6 +213,7 @@ export default function App() {
   const handleAuthSuccess = async (profile: UserProfile) => {
     setUser(profile);
     setActiveView('dashboard');
+    showSuccess(`Welcome back, ${profile.name}!`);
     if (profile.id) {
       const savedConvs = await fetchUserConversations(profile.id);
       setConversations(savedConvs || []);
@@ -285,6 +288,7 @@ export default function App() {
     localStorage.removeItem(STORAGE_KEY_ACTIVE_VIEW);
     localStorage.removeItem('culture_ai_conversations_v2');
     setActiveView('landing');
+    showInfo('Signed out successfully.');
   };
 
   const handleCompleteOnboarding = async (profile: UserProfile) => {
@@ -465,6 +469,7 @@ export default function App() {
     } catch (err: any) {
       console.error('Chat error:', err);
       const errorMsg = err?.message || 'Failed to connect to CULTURE AI backend.';
+      showError(`AI Error: ${errorMsg}`);
       const errorAssistantMsg: ChatMessage = {
         id: generateUUID(),
         role: 'assistant',

@@ -63,7 +63,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <div className="absolute top-[40%] left-[30%] w-[400px] h-[400px] bg-teal-500 rounded-full blur-[180px] opacity-15 pointer-events-none"></div>
 
       {/* Subtle Side Rail Text */}
-      <div className="hidden xl:block absolute right-[-70px] top-1/2 -translate-y-1/2 rotate-90 text-[10px] font-bold tracking-[0.5em] text-slate-700 uppercase pointer-events-none whitespace-nowrap">
+      <div className="hidden xl:block absolute right-[-70px] top-1/2 -translate-y-1/2 rotate-90 text-xs font-bold tracking-[0.5em] text-slate-500 uppercase pointer-events-none whitespace-nowrap">
         EMPOWERING THE NEXT GENERATION OF MINDS
       </div>
 
@@ -77,7 +77,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <motion.div 
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="inline-flex items-center gap-2 text-[11px] font-extrabold tracking-[0.2em] uppercase text-indigo-300 py-1.5 px-4 border border-indigo-500/40 rounded-full mb-6 bg-indigo-500/10 shadow-lg shadow-indigo-500/10"
+              className="inline-flex items-center gap-2 text-xs font-extrabold tracking-[0.2em] uppercase text-indigo-300 py-1.5 px-4 border border-indigo-500/40 rounded-full mb-6 bg-indigo-500/10 shadow-lg shadow-indigo-500/10"
             >
               <Sparkles className="w-4 h-4 text-amber-400 animate-spin" style={{ animationDuration: '4s' }} />
               <span>Adaptive Educational Intelligence</span>
@@ -107,14 +107,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
 
           <div className="text-left lg:text-right border-l lg:border-l-0 lg:border-r border-indigo-500/40 pl-4 lg:pl-0 lg:pr-4">
-            <div className="text-[11px] font-mono text-cyan-400 font-bold uppercase tracking-wider mb-1">
+            <div className="text-xs font-mono text-cyan-400 font-bold uppercase tracking-wider mb-1">
               SYSTEM STATUS
             </div>
             <div className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2 lg:justify-end">
               <span className="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping" />
               <span>L-MODEL V4.2 ACTIVE</span>
             </div>
-            <div className="text-[10px] font-mono text-slate-400 mt-1">
+            <div className="text-xs font-mono text-slate-400 mt-1">
               CULTURE AI ADAPTIVE ENGINE
             </div>
           </div>
@@ -141,7 +141,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <div className="w-16 h-16 bg-gradient-to-tr from-indigo-600 via-purple-600 to-sky-500 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/30 group-hover:scale-125 transition-transform duration-100 ease-out">
                   <GraduationCap className="w-8 h-8 text-white" />
                 </div>
-                <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-indigo-300 py-1.5 px-3.5 border border-indigo-400/40 rounded-full bg-indigo-500/20 shadow-sm">
+                <span className="text-xs font-bold tracking-[0.2em] uppercase text-indigo-300 py-1.5 px-3.5 border border-indigo-400/40 rounded-full bg-indigo-500/20 shadow-sm">
                   Personalized Path
                 </span>
               </div>
@@ -173,7 +173,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <div className="w-16 h-16 bg-gradient-to-tr from-amber-500 via-orange-500 to-amber-600 rounded-2xl flex items-center justify-center shadow-lg shadow-amber-500/30 group-hover:scale-125 transition-transform duration-100 ease-out">
                   <School className="w-8 h-8 text-white" />
                 </div>
-                <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-amber-300 py-1.5 px-3.5 border border-amber-400/40 rounded-full bg-amber-500/20 shadow-sm">
+                <span className="text-xs font-bold tracking-[0.2em] uppercase text-amber-300 py-1.5 px-3.5 border border-amber-400/40 rounded-full bg-amber-500/20 shadow-sm">
                   Co-Pilot Mode
                 </span>
               </div>
@@ -202,7 +202,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div className="bg-slate-900/80 border border-indigo-500/30 rounded-[32px] p-6 sm:p-10 backdrop-blur-xl mb-16 shadow-2xl">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 border-b border-slate-800 pb-6">
             <div>
-              <div className="inline-flex items-center gap-2 text-[10px] font-mono font-bold tracking-[0.2em] uppercase text-indigo-300 bg-indigo-500/20 px-3.5 py-1 rounded-full border border-indigo-500/30 mb-2">
+              <div className="inline-flex items-center gap-2 text-xs font-mono font-bold tracking-[0.2em] uppercase text-indigo-300 bg-indigo-500/20 px-3.5 py-1 rounded-full border border-indigo-500/30 mb-2">
                 <Brain className="w-4 h-4 text-purple-400" />
                 <span>DYNAMIC CONCEPT ADAPTATION DEMO</span>
               </div>

@@ -3,6 +3,7 @@ import { UserProfile, ChatMessage, Conversation } from '../types';
 import { EDUCATION_LEVELS, TEACHER_CONFIG } from '../data/personas';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { motion, AnimatePresence } from 'motion/react';
+import { useToast } from '../context/ToastContext';
 import { 
   Send, 
   Sparkles, 
@@ -24,7 +25,9 @@ import {
   Zap,
   ChevronRight,
   PanelLeftOpen,
-  PanelLeftClose
+  PanelLeftClose,
+  X,
+  AlertTriangle
 } from 'lucide-react';
 
 interface WorkspaceProps {
@@ -60,13 +63,31 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   onOpenFlashcardsModal,
   isGenerating,
 }) => {
+  const { showSuccess } = useToast();
   const [inputText, setInputText] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>(user.subjects[0] || 'General');
-  
+
   /* COLLAPSIBLE SIDEBAR STATE */
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
   const sidebarWidth = 320; // Wide by default
+
+  /* DELETION CONFIRMATION MODAL STATE */
+  const [sessionToDelete, setSessionToDelete] = useState<{ id: string; title: string } | null>(null);
+  const [showClearAllConfirm, setShowClearAllConfirm] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSessionToDelete(null);
+        setShowClearAllConfirm(false);
+      }
+    };
+    if (sessionToDelete || showClearAllConfirm) {
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [sessionToDelete, showClearAllConfirm]);
   
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
@@ -95,6 +116,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   const handleCopy = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
+    showSuccess('Response copied to clipboard!');
     setTimeout(() => setCopiedId(null), 2000);
   };
 
@@ -104,111 +126,136 @@ export const Workspace: React.FC<WorkspaceProps> = ({
       {/* ADJUSTABLE & COLLAPSIBLE SIDEBAR: CONVERSATION HISTORY & CONTEXT */}
       <AnimatePresence initial={false}>
         {isSidebarOpen && (
-          <motion.aside 
-            initial={{ width: 0, opacity: 0 }}
-            animate={{ width: sidebarWidth, opacity: 1 }}
-            exit={{ width: 0, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            style={{ width: `${sidebarWidth}px` }}
-            className="border-r border-white/15 bg-slate-900/90 flex flex-col justify-between shrink-0 backdrop-blur-2xl z-20 overflow-hidden"
-          >
-            <div className="p-4 space-y-5 overflow-y-auto">
-              
-              {/* Top Controls: Dashboard Back, New Session */}
-              <div className="flex items-center gap-2">
-                <motion.button
-                  whileHover={{ scale: 1.08 }}
-                  whileTap={{ scale: 0.92 }}
-                  onClick={onBackToDashboard}
-                  className="p-2.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 transition-colors shadow-md cursor-pointer"
-                  title="Back to Dashboard"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                </motion.button>
+          <>
+            {/* Mobile Backdrop Overlay */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setIsSidebarOpen(false)}
+              className="fixed inset-0 bg-slate-950/80 z-30 md:hidden backdrop-blur-sm cursor-pointer"
+              aria-hidden="true"
+            />
 
-                <motion.button
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={onStartNewChat}
-                  className="flex-1 py-2.5 px-3.5 rounded-full bg-gradient-to-r from-indigo-600 via-purple-600 to-amber-500 hover:from-indigo-500 hover:to-amber-400 text-white font-extrabold uppercase tracking-wider text-xs shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all cursor-pointer whitespace-nowrap"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>New Session</span>
-                </motion.button>
-              </div>
+            <motion.aside 
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: sidebarWidth, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              style={{ width: `${sidebarWidth}px` }}
+              className="fixed md:relative inset-y-0 left-0 z-40 md:z-20 max-w-[85vw] border-r border-white/15 bg-slate-900/95 md:bg-slate-900/90 flex flex-col justify-between shrink-0 backdrop-blur-2xl overflow-hidden shadow-2xl md:shadow-none"
+            >
+              <div className="p-4 space-y-5 overflow-y-auto">
+                
+                {/* Top Controls: Dashboard Back, New Session */}
+                <div className="flex items-center gap-2">
+                  <motion.button
+                    whileHover={{ scale: 1.08 }}
+                    whileTap={{ scale: 0.92 }}
+                    onClick={onBackToDashboard}
+                    aria-label="Back to Dashboard"
+                    className="p-2.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 transition-colors shadow-md cursor-pointer"
+                    title="Back to Dashboard"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </motion.button>
 
-              {/* User Context Badge */}
-              <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-indigo-500/30 space-y-1 shadow-md">
-                <div className="flex items-center justify-between text-xs font-bold text-white">
-                  <span className="flex items-center gap-2 truncate">
-                    {isTeacher ? <School className="w-4 h-4 text-amber-400 shrink-0" /> : <GraduationCap className="w-4 h-4 text-sky-400 shrink-0" />}
-                    <span className="capitalize truncate">{user.name}</span>
-                  </span>
-                  <span className="text-[10px] font-mono font-bold text-indigo-300 bg-indigo-500/20 px-2 py-0.5 rounded-full border border-indigo-500/30 uppercase shrink-0">
-                    {isTeacher ? 'TEACHER' : user.educationLevel.replace('_', ' ')}
-                  </span>
-                </div>
-              </div>
-
-              {/* Conversation History List */}
-              <div className="space-y-2 pt-3 border-t border-white/10">
-                <div className="flex items-center justify-between px-1">
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-indigo-300 block">
-                    SESSION HISTORY ({conversations.length})
-                  </span>
-                  {conversations.length > 0 && onDeleteAllConversations && (
-                    <button
-                      onClick={onDeleteAllConversations}
-                      className="text-[10px] font-mono font-bold text-red-400 hover:text-red-300 transition-colors cursor-pointer"
-                      title="Clear all sessions"
-                    >
-                      Clear All
-                    </button>
-                  )}
+                  <motion.button
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => {
+                      onStartNewChat();
+                      if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                        setIsSidebarOpen(false);
+                      }
+                    }}
+                    className="flex-1 py-2.5 px-3.5 rounded-full bg-gradient-to-r from-indigo-600 via-purple-600 to-amber-500 hover:from-indigo-500 hover:to-amber-400 text-white font-extrabold uppercase tracking-wider text-xs shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all cursor-pointer whitespace-nowrap"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>New Session</span>
+                  </motion.button>
                 </div>
 
-                <div className="space-y-1.5 max-h-[calc(100vh-16rem)] overflow-y-auto">
-                  {conversations.length === 0 ? (
-                    <p className="text-xs text-slate-400 italic px-2 py-3 text-center">No previous sessions.</p>
-                  ) : (
-                    conversations.map((c) => {
-                      const isActive = activeConversation?.id === c.id;
-                      return (
-                        <motion.div
-                          key={c.id}
-                          whileHover={{ x: 3 }}
-                          onClick={() => onSelectConversation(c.id)}
-                          className={`group w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-between cursor-pointer transition-colors ${
-                            isActive
-                              ? 'bg-indigo-600/30 text-indigo-100 border border-indigo-400/50 shadow-md'
-                              : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
-                          }`}
-                        >
-                          <span className="truncate pr-2 font-medium">{c.title || 'New Session'}</span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDeleteConversation(c.id);
+                {/* User Context Badge */}
+                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-indigo-500/30 space-y-1 shadow-md">
+                  <div className="flex items-center justify-between text-xs font-bold text-white">
+                    <span className="flex items-center gap-2 truncate">
+                      {isTeacher ? <School className="w-4 h-4 text-amber-400 shrink-0" /> : <GraduationCap className="w-4 h-4 text-sky-400 shrink-0" />}
+                      <span className="capitalize truncate">{user.name}</span>
+                    </span>
+                    <span className="text-xs font-mono font-bold text-indigo-300 bg-indigo-500/20 px-2 py-0.5 rounded-full border border-indigo-500/30 uppercase shrink-0">
+                      {isTeacher ? 'TEACHER' : user.educationLevel.replace('_', ' ')}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Conversation History List */}
+                <div className="space-y-2 pt-3 border-t border-white/10">
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-xs font-mono font-bold uppercase tracking-widest text-indigo-300 block">
+                      SESSION HISTORY ({conversations.length})
+                    </span>
+                    {conversations.length > 0 && onDeleteAllConversations && (
+                      <button
+                        onClick={() => setShowClearAllConfirm(true)}
+                        className="text-xs font-mono font-bold text-red-400 hover:text-red-300 transition-colors cursor-pointer"
+                        title="Clear all sessions"
+                      >
+                        Clear All
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5 max-h-[calc(100vh-16rem)] overflow-y-auto">
+                    {conversations.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic px-2 py-3 text-center">No previous sessions.</p>
+                    ) : (
+                      conversations.map((c) => {
+                        const isActive = activeConversation?.id === c.id;
+                        return (
+                          <motion.div
+                            key={c.id}
+                            whileHover={{ x: 3 }}
+                            onClick={() => {
+                              onSelectConversation(c.id);
+                              if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                                setIsSidebarOpen(false);
+                              }
                             }}
-                            className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-400 transition-opacity p-1 cursor-pointer"
-                            title="Delete session"
+                            className={`group w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-between cursor-pointer transition-colors ${
+                              isActive
+                                ? 'bg-indigo-600/30 text-indigo-100 border border-indigo-400/50 shadow-md'
+                                : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+                            }`}
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </motion.div>
-                      );
-                    })
-                  )}
+                            <span className="truncate pr-2 font-medium">{c.title || 'New Session'}</span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSessionToDelete({ id: c.id, title: c.title || 'New Session' });
+                              }}
+                              aria-label="Delete session"
+                              className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-400 transition-opacity p-1 cursor-pointer"
+                              title="Delete session"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </motion.div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
+
               </div>
 
-            </div>
-
-            {/* Sidebar Footer - Gemini Removed */}
-            <div className="p-3 border-t border-white/10 text-center text-[10px] font-mono text-slate-400 font-bold uppercase tracking-widest">
-              CULTURE AI • ADAPTIVE LEARNING
-            </div>
-          </motion.aside>
+              {/* Sidebar Footer - Gemini Removed */}
+              <div className="p-3 border-t border-white/10 text-center text-xs font-mono text-slate-400 font-bold uppercase tracking-widest">
+                CULTURE AI • ADAPTIVE LEARNING
+              </div>
+            </motion.aside>
+          </>
         )}
       </AnimatePresence>
 
@@ -224,17 +271,20 @@ export const Workspace: React.FC<WorkspaceProps> = ({
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              aria-label="Toggle session menu"
+              aria-expanded={isSidebarOpen}
               className="px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-white/15 text-slate-200 text-xs font-bold flex items-center gap-2 cursor-pointer shadow-md transition-all"
               title={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
             >
               {isSidebarOpen ? <PanelLeftClose className="w-4 h-4 text-indigo-300" /> : <PanelLeftOpen className="w-4 h-4 text-indigo-300" />}
-              <span className="hidden sm:inline font-mono text-[11px] uppercase tracking-wider text-indigo-200">
+              <span className="hidden sm:inline font-mono text-xs uppercase tracking-wider text-indigo-200">
                 {isSidebarOpen ? 'Hide Menu' : 'Sessions Menu'}
               </span>
             </motion.button>
 
             <button
               onClick={onBackToDashboard}
+              aria-label="Back to Dashboard"
               className="md:hidden p-1.5 rounded-lg bg-slate-800 text-slate-300"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -245,7 +295,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
               <span className="text-xs sm:text-sm font-black text-white tracking-wide">
                 CULTURE AI Workspace
               </span>
-              <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${
+              <span className={`text-xs font-extrabold px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${
                 isTeacher 
                   ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' 
                   : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
@@ -482,6 +532,147 @@ export const Workspace: React.FC<WorkspaceProps> = ({
         </div>
 
       </main>
+
+      {/* DELETION CONFIRMATION MODAL - INDIVIDUAL SESSION */}
+      <AnimatePresence>
+        {sessionToDelete && (
+          <div 
+            onClick={() => setSessionToDelete(null)}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.15 }}
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="delete-session-modal-title"
+              className="w-full max-w-md bg-slate-900 border border-white/15 rounded-3xl p-6 shadow-2xl relative glass-card"
+            >
+              <button
+                onClick={() => setSessionToDelete(null)}
+                aria-label="Close"
+                className="absolute top-5 right-5 p-2 rounded-full bg-white/5 border border-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-3.5 mb-4">
+                <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 shrink-0">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 id="delete-session-modal-title" className="text-lg font-black text-white">
+                    Delete Session?
+                  </h3>
+                  <p className="text-xs font-mono text-slate-400">PERMANENT ACTION</p>
+                </div>
+              </div>
+
+              <p className="text-sm text-slate-300 leading-relaxed mb-6">
+                Are you sure you want to delete <span className="font-bold text-white">"{sessionToDelete.title}"</span>? All messages in this session will be permanently removed.
+              </p>
+
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSessionToDelete(null)}
+                  className="px-5 py-2.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/10 font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onDeleteConversation(sessionToDelete.id);
+                    setSessionToDelete(null);
+                    showSuccess('Study session deleted.');
+                  }}
+                  className="px-5 py-2.5 rounded-full bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-rose-600/30 transition-all cursor-pointer flex items-center gap-2"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* DELETION CONFIRMATION MODAL - CLEAR ALL */}
+      <AnimatePresence>
+        {showClearAllConfirm && (
+          <div 
+            onClick={() => setShowClearAllConfirm(false)}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.15 }}
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="clear-all-modal-title"
+              className="w-full max-w-md bg-slate-900 border border-red-500/30 rounded-3xl p-6 shadow-2xl relative glass-card"
+            >
+              <button
+                onClick={() => setShowClearAllConfirm(false)}
+                aria-label="Close"
+                className="absolute top-5 right-5 p-2 rounded-full bg-white/5 border border-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-3.5 mb-4">
+                <div className="p-3 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-400 shrink-0">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 id="clear-all-modal-title" className="text-lg font-black text-white">
+                    Clear All Sessions?
+                  </h3>
+                  <p className="text-xs font-mono text-red-400 font-bold uppercase tracking-wider">
+                    DESTRUCTIVE ACTION
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-sm text-slate-300 leading-relaxed mb-6">
+                Are you sure you want to delete <span className="font-bold text-white">ALL ({conversations.length}) study sessions</span>? This will wipe your entire conversation history for this account. This action cannot be undone.
+              </p>
+
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowClearAllConfirm(false)}
+                  className="px-5 py-2.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/10 font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onDeleteAllConversations) {
+                      onDeleteAllConversations();
+                      showSuccess('All study sessions cleared.');
+                    }
+                    setShowClearAllConfirm(false);
+                  }}
+                  className="px-5 py-2.5 rounded-full bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 hover:from-rose-500 hover:to-red-500 text-white font-extrabold text-xs uppercase tracking-wider shadow-xl shadow-red-600/40 transition-all cursor-pointer flex items-center gap-2"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Clear All Sessions</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 };
