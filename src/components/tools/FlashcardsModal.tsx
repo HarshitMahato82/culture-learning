@@ -3,6 +3,8 @@ import { X, Grid, Sparkles, RefreshCw, ArrowLeft, ArrowRight, RotateCw, AlertCir
 import { Flashcard, UserProfile } from '../../types';
 import { recordLearningActivity } from '../../lib/dataService';
 import { supabase } from '../../lib/supabase';
+import { useToast } from '../../context/ToastContext';
+import { getAchievementById } from '../../data/achievements';
 
 interface FlashcardsModalProps {
   isOpen: boolean;
@@ -11,6 +13,7 @@ interface FlashcardsModalProps {
 }
 
 export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({ isOpen, onClose, user }) => {
+  const { showSuccess } = useToast();
   const [topic, setTopic] = useState('Key Formulas in Physics');
   const [cardCount, setCardCount] = useState<number>(5);
   const [loading, setLoading] = useState(false);
@@ -71,7 +74,20 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({ isOpen, onClos
             user.subjects[0] || 'General',
             topic || 'Flashcard Revision',
             { cardCount: json.flashcards.length }
-          );
+          ).then((res) => {
+            if (res?.newlyUnlockedAchievements?.length) {
+              for (const achId of res.newlyUnlockedAchievements) {
+                const ach = getAchievementById(achId);
+                if (ach) {
+                  showSuccess(`🏆 Achievement Unlocked: ${ach.title} — ${ach.description}`);
+                } else {
+                  console.warn(`[CULTURE AI] Unknown achievement unlocked ID: ${achId}`);
+                }
+              }
+            }
+          }).catch((err) => {
+            console.error('[CULTURE AI] Toast achievement alert error:', err);
+          });
         }
       }
     } catch (err) {

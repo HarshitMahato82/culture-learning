@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabase';
+import { evaluateAchievements } from './achievementService';
 import { 
   UserProfile, 
   UserRole,
@@ -284,11 +285,12 @@ export async function recordLearningActivity(
   subject: string,
   topic: string,
   metadata: Record<string, any> = {}
-): Promise<{ updatedStreak: StreakData; newProgressPercent: number }> {
+): Promise<{ updatedStreak: StreakData; newProgressPercent: number; newlyUnlockedAchievements?: string[] }> {
   if (!userId) {
     return {
       updatedStreak: { currentStreak: 0, longestStreak: 0, lastActivityDate: null },
       newProgressPercent: 0,
+      newlyUnlockedAchievements: [],
     };
   }
 
@@ -408,9 +410,26 @@ export async function recordLearningActivity(
     }
   }
 
+  // 3. Evaluate achievements safely post-activity
+  let newlyUnlockedAchievements: string[] = [];
+  try {
+    const currentStats = await fetchCalculatedDashboardStats(userId);
+    newlyUnlockedAchievements = await evaluateAchievements(userId, {
+      totalActivitiesCount: currentStats.totalActivitiesCount,
+      currentStreak: updatedStreakData.currentStreak,
+      longestStreak: updatedStreakData.longestStreak,
+      overallProgressPercent: currentStats.overallProgressPercent,
+      activityType: activityType,
+      activityMetadata: metadata,
+    });
+  } catch (achErr) {
+    console.error('[CULTURE AI] Error evaluating achievements post-activity:', achErr);
+  }
+
   return {
     updatedStreak: updatedStreakData,
     newProgressPercent: calculatedProgress,
+    newlyUnlockedAchievements,
   };
 }
 

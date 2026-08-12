@@ -3,6 +3,8 @@ import { X, Calendar, Sparkles, RefreshCw, Copy, Check, Clock, BookOpen, Users, 
 import { LessonPlanData, UserProfile } from '../../types';
 import { recordLearningActivity } from '../../lib/dataService';
 import { supabase } from '../../lib/supabase';
+import { useToast } from '../../context/ToastContext';
+import { getAchievementById } from '../../data/achievements';
 
 interface LessonPlanModalProps {
   isOpen: boolean;
@@ -11,6 +13,7 @@ interface LessonPlanModalProps {
 }
 
 export const LessonPlanModal: React.FC<LessonPlanModalProps> = ({ isOpen, onClose, user }) => {
+  const { showSuccess } = useToast();
   const [topic, setTopic] = useState('Introduction to Cell Biology');
   const [gradeLevel, setGradeLevel] = useState(`Grade ${user.educationLevel}`);
   const [duration, setDuration] = useState('45 mins');
@@ -66,7 +69,20 @@ export const LessonPlanModal: React.FC<LessonPlanModalProps> = ({ isOpen, onClos
             user.subjects[0] || 'General',
             topic || 'Lesson Planning',
             { duration, gradeLevel }
-          );
+          ).then((res) => {
+            if (res?.newlyUnlockedAchievements?.length) {
+              for (const achId of res.newlyUnlockedAchievements) {
+                const ach = getAchievementById(achId);
+                if (ach) {
+                  showSuccess(`🏆 Achievement Unlocked: ${ach.title} — ${ach.description}`);
+                } else {
+                  console.warn(`[CULTURE AI] Unknown achievement unlocked ID: ${achId}`);
+                }
+              }
+            }
+          }).catch((err) => {
+            console.error('[CULTURE AI] Toast achievement alert error:', err);
+          });
         }
       }
     } catch (err) {

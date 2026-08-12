@@ -3,6 +3,8 @@ import { X, HelpCircle, Sparkles, RefreshCw, CheckCircle2, XCircle, Award, Arrow
 import { QuizData, UserProfile } from '../../types';
 import { recordLearningActivity } from '../../lib/dataService';
 import { supabase } from '../../lib/supabase';
+import { useToast } from '../../context/ToastContext';
+import { getAchievementById } from '../../data/achievements';
 
 interface QuizRunnerModalProps {
   isOpen: boolean;
@@ -11,6 +13,7 @@ interface QuizRunnerModalProps {
 }
 
 export const QuizRunnerModal: React.FC<QuizRunnerModalProps> = ({ isOpen, onClose, user }) => {
+  const { showSuccess } = useToast();
   const [topic, setTopic] = useState('Kinematics & Motion');
   const [questionCount, setQuestionCount] = useState<number>(5);
   const [loading, setLoading] = useState(false);
@@ -262,7 +265,20 @@ export const QuizRunnerModal: React.FC<QuizRunnerModalProps> = ({ isOpen, onClos
                                 user.subjects[0] || 'General',
                                 topic || 'General Quiz',
                                 { score: calculateScore(), total: quizData.questions.length }
-                              );
+                              ).then((res) => {
+                                if (res?.newlyUnlockedAchievements?.length) {
+                                  for (const achId of res.newlyUnlockedAchievements) {
+                                    const ach = getAchievementById(achId);
+                                    if (ach) {
+                                      showSuccess(`🏆 Achievement Unlocked: ${ach.title} — ${ach.description}`);
+                                    } else {
+                                      console.warn(`[CULTURE AI] Unknown achievement unlocked ID: ${achId}`);
+                                    }
+                                  }
+                                }
+                              }).catch((err) => {
+                                console.error('[CULTURE AI] Toast achievement alert error:', err);
+                              });
                             }
                           }}
                           className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/20"

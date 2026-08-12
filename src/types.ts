@@ -124,3 +124,23 @@ export interface LevelAdaptation {
     university: string;
   };
 }
+
+export type AchievementCategory = 'learning' | 'streak' | 'quiz' | 'progress';
+export type AchievementTier = 'bronze' | 'silver' | 'gold';
+
+export interface Achievement {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  category: AchievementCategory;
+  tier: AchievementTier;
+}
+
+export interface UserAchievement {
+  id: string;
+  user_id: string;
+  achievement_id: string;
+  unlocked_at: string;
+}
+

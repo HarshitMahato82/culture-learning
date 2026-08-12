@@ -25,6 +25,7 @@ import {
   recordLearningActivity,
   generateUUID 
 } from './lib/dataService';
+import { getAchievementById } from './data/achievements';
 
 const STORAGE_KEY_USER = 'culture_ai_user_profile_v2';
 const STORAGE_KEY_ACTIVE_VIEW = 'culture_ai_active_view_v2';
@@ -464,7 +465,20 @@ export default function App() {
           user.subjects[0] || 'General',
           text.slice(0, 30),
           { length: text.length }
-        );
+        ).then((res) => {
+          if (res?.newlyUnlockedAchievements?.length) {
+            for (const achId of res.newlyUnlockedAchievements) {
+              const ach = getAchievementById(achId);
+              if (ach) {
+                showSuccess(`🏆 Achievement Unlocked: ${ach.title} — ${ach.description}`);
+              } else {
+                console.warn(`[CULTURE AI] Unknown achievement unlocked ID: ${achId}`);
+              }
+            }
+          }
+        }).catch((err) => {
+          console.error('[CULTURE AI] Toast achievement alert error:', err);
+        });
       }
     } catch (err: any) {
       console.error('Chat error:', err);
