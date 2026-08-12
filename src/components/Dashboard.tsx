@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { UserProfile, Conversation, DashboardCalculatedStats } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { UserProfile, Conversation, DashboardCalculatedStats, UserAchievement } from '../types';
 import { EDUCATION_LEVELS } from '../data/personas';
 import { motion } from 'motion/react';
 import { 
@@ -23,9 +23,45 @@ import {
   Milestone, 
   Compass, 
   Lock,
-  User 
+  User,
+  Sprout,
+  Brain,
+  Map as MapIcon,
+  Award
 } from 'lucide-react';
 import { fetchCalculatedDashboardStats } from '../lib/dataService';
+import { fetchUserAchievements } from '../lib/achievementService';
+import { ACHIEVEMENTS } from '../data/achievements';
+
+const ACHIEVEMENT_ICON_MAP: Record<string, React.FC<{ className?: string }>> = {
+  Sprout,
+  Flame,
+  Zap,
+  Brain,
+  BookOpen,
+  Map: MapIcon,
+};
+
+const TIER_STYLES: Record<string, { badge: string; border: string; glow: string; text: string }> = {
+  bronze: {
+    badge: 'bg-amber-950/40 text-amber-400 border-amber-600/30',
+    border: 'border-amber-500/30 hover:border-amber-500/50',
+    glow: 'from-amber-500/10 via-amber-500/5 to-transparent',
+    text: 'text-amber-400',
+  },
+  silver: {
+    badge: 'bg-slate-800/60 text-slate-200 border-slate-500/30',
+    border: 'border-slate-400/30 hover:border-slate-400/50',
+    glow: 'from-slate-400/10 via-slate-400/5 to-transparent',
+    text: 'text-slate-300',
+  },
+  gold: {
+    badge: 'bg-yellow-950/40 text-yellow-300 border-yellow-500/30',
+    border: 'border-yellow-500/40 hover:border-yellow-400/60',
+    glow: 'from-yellow-500/15 via-amber-500/5 to-transparent',
+    text: 'text-yellow-300',
+  },
+};
 
 interface DashboardProps {
   user: UserProfile;
@@ -54,14 +90,48 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const levelMeta = EDUCATION_LEVELS[user.educationLevel] || EDUCATION_LEVELS.high_school;
   const [selectedSubjectPath, setSelectedSubjectPath] = useState<string>(user.subjects[0] || 'General');
 
-  // Keep selectedSubjectPath synchronized with user.subjects if user modifies profile
+  const [unlockedAchievements, setUnlockedAchievements] = useState<UserAchievement[]>([]);
+  const [loadingAchievements, setLoadingAchievements] = useState(true);
+
   useEffect(() => {
-    if (user.subjects && user.subjects.length > 0) {
-      if (!user.subjects.includes(selectedSubjectPath)) {
-        setSelectedSubjectPath(user.subjects[0]);
+    let isMounted = true;
+    async function loadAchievements() {
+      if (!user?.id) {
+        setLoadingAchievements(false);
+        return;
+      }
+      setLoadingAchievements(true);
+      try {
+        const achievements = await fetchUserAchievements(user.id);
+        if (isMounted) {
+          setUnlockedAchievements(achievements);
+        }
+      } catch (err) {
+        console.error('[CULTURE AI Dashboard] Failed to load user achievements:', err);
+      } finally {
+        if (isMounted) {
+          setLoadingAchievements(false);
+        }
       }
     }
-  }, [user.subjects]);
+
+    loadAchievements();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
+
+  const unlockedMap = useMemo(() => {
+    const map = new Map<string, string>();
+    unlockedAchievements.forEach((ua) => {
+      map.set(ua.achievement_id, ua.unlocked_at);
+    });
+    return map;
+  }, [unlockedAchievements]);
+
+  const unlockedCount = unlockedMap.size;
+  const totalAchievementsCount = ACHIEVEMENTS.length;
 
   const [stats, setStats] = useState<DashboardCalculatedStats>({
     overallProgressPercent: 0,
@@ -452,7 +522,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </p>
           </div>
 
-          {/* Gamified Stat Badges (Real Streak & Real Progress) */}
+          {/* Gamified Stat Badges (Real Streak & Real Progress & Achievements) */}
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-amber-500/15 border border-amber-400/30 text-amber-200 text-xs font-bold shadow-md">
               <Flame className="w-4 h-4 text-amber-400 animate-bounce" />
@@ -466,6 +536,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <Trophy className="w-4 h-4 text-indigo-400" />
               <span>{stats.overallProgressPercent}% Path Completed</span>
             </div>
+            <button
+              onClick={() => {
+                document.getElementById('achievements-section')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-300 text-xs font-bold shadow-md cursor-pointer transition-all hover:scale-105"
+            >
+              <Award className="w-4 h-4 text-amber-400" />
+              <span>{unlockedCount} / {totalAchievementsCount} Badges</span>
+            </button>
           </div>
         </div>
 
@@ -709,6 +788,119 @@ export const Dashboard: React.FC<DashboardProps> = ({
           )}
 
         </div>
+      </div>
+
+      {/* ACHIEVEMENTS & BADGES SECTION */}
+      <div id="achievements-section" className="space-y-6 pt-4 border-t border-white/10">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/30 text-amber-300 text-xs font-mono font-bold uppercase tracking-wider mb-2">
+              <Award className="w-3.5 h-3.5" />
+              <span>CULTURE AI MILESTONES</span>
+            </div>
+            <h2 className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
+              <span>Achievements & Badges</span>
+            </h2>
+            <p className="text-xs text-slate-300 font-medium">
+              Complete learning activities, practice sessions, and streaks to earn prestigious academic badges.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-slate-900/80 border border-amber-500/30 text-amber-300 text-xs font-bold font-mono">
+            <Trophy className="w-4 h-4 text-amber-400" />
+            <span>{unlockedCount} of {totalAchievementsCount} Unlocked</span>
+          </div>
+        </div>
+
+        {loadingAchievements ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {[1, 2, 3, 4, 5, 6].map((idx) => (
+              <div key={idx} className="p-6 rounded-[28px] glass-card border border-white/10 animate-pulse h-48 bg-slate-900/40" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {ACHIEVEMENTS.map((achievement) => {
+              const isUnlocked = unlockedMap.has(achievement.id);
+              const unlockedAt = unlockedMap.get(achievement.id);
+              const IconComp = ACHIEVEMENT_ICON_MAP[achievement.icon] || Award;
+              const tierStyle = TIER_STYLES[achievement.tier] || TIER_STYLES.bronze;
+
+              return (
+                <motion.div
+                  key={achievement.id}
+                  whileHover={{ y: isUnlocked ? -4 : 0, scale: isUnlocked ? 1.02 : 1 }}
+                  className={`p-6 rounded-[28px] glass-card border transition-all relative overflow-hidden flex flex-col justify-between group ${
+                    isUnlocked
+                      ? `${tierStyle.border} bg-slate-900/80 shadow-xl shadow-amber-500/5`
+                      : 'border-white/10 bg-slate-950/50 opacity-60'
+                  }`}
+                >
+                  {/* Tier background glow */}
+                  {isUnlocked && (
+                    <div className={`absolute -top-10 -right-10 w-32 h-32 bg-gradient-to-br ${tierStyle.glow} rounded-full blur-2xl pointer-events-none`} />
+                  )}
+
+                  <div>
+                    {/* Header: Tier Badge & Icon */}
+                    <div className="flex items-center justify-between mb-4">
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${
+                        isUnlocked 
+                          ? `${tierStyle.badge} shadow-lg` 
+                          : 'bg-slate-900 border-white/10 text-slate-500'
+                      }`}>
+                        <IconComp className="w-6 h-6" />
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2.5 py-1 rounded-full border text-[10px] font-mono font-bold uppercase tracking-wider ${
+                          isUnlocked ? tierStyle.badge : 'bg-slate-900 text-slate-500 border-white/10'
+                        }`}>
+                          {achievement.tier}
+                        </span>
+
+                        {isUnlocked ? (
+                          <span className="p-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" title="Unlocked">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                          </span>
+                        ) : (
+                          <span className="p-1 rounded-full bg-slate-800 text-slate-500 border border-slate-700" title="Locked">
+                            <Lock className="w-3.5 h-3.5" />
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Achievement Name & Description */}
+                    <h3 className={`text-base font-extrabold ${isUnlocked ? 'text-white' : 'text-slate-400'} group-hover:text-amber-200 transition-colors`}>
+                      {achievement.title}
+                    </h3>
+                    <p className="text-xs text-slate-300 mt-2 leading-relaxed font-medium">
+                      {achievement.description}
+                    </p>
+                  </div>
+
+                  {/* Footer status */}
+                  <div className="mt-6 pt-3 border-t border-white/10 flex items-center justify-between text-[11px] font-mono font-semibold">
+                    {isUnlocked ? (
+                      <>
+                        <span className="text-emerald-400">UNLOCKED</span>
+                        <span className="text-slate-400">
+                          {unlockedAt ? new Date(unlockedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unlocked'}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-slate-500">LOCKED</span>
+                        <span className="text-slate-500">Keep Learning</span>
+                      </>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
     </div>

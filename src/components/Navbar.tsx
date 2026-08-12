@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
-import { GraduationCap, School, ChevronDown, Layers, LogOut, User, LogIn } from 'lucide-react';
+import { GraduationCap, School, ChevronDown, Layers, LogOut, User, LogIn, Trophy } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface NavbarProps {
@@ -132,6 +132,22 @@ export const Navbar: React.FC<NavbarProps> = ({
                       className="w-full text-left px-3 py-2 rounded-xl text-slate-200 hover:bg-white/10 hover:text-white font-bold transition-colors flex items-center justify-between cursor-pointer"
                     >
                       <span>Dashboard & Progress</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setShowUserDropdown(false);
+                        setActiveView('dashboard');
+                        setTimeout(() => {
+                          document.getElementById('achievements-section')?.scrollIntoView({ behavior: 'smooth' });
+                        }, 100);
+                      }}
+                      className="w-full text-left px-3 py-2 rounded-xl text-slate-200 hover:bg-white/10 hover:text-white font-bold transition-colors flex items-center justify-between cursor-pointer"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Achievements & Badges</span>
+                      </span>
                     </button>
 
                     <button
